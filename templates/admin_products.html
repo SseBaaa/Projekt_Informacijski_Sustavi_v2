@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+    <meta charset="UTF-8">
+    <title>Administracija Proizvoda</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='admin.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+    <h1>Administracija Proizvoda</h1>
+    <div>
+        <span>Prijavljen: <strong>{{ current_user.username }}</strong></span>
+        <a href="{{ url_for('tables') }}">Prikaz Stolova</a>  <a href="{{ url_for('dashboard') }}">Dashboard</a>
+        <a href="{{ url_for('logout') }}">Odjava</a>
+    </div>
+</nav>
+
+    <div class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <ul class=flash-messages>
+            {% for category, message in messages %}
+              <li class="{{ category }}">{{ message }}</li>
+            {% endfor %}
+            </ul>
+          {% endif %}
+        {% endwith %}
+
+        <a href="{{ url_for('add_product') }}" class="actions btn-add">Dodaj Novi Proizvod</a>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Naziv</th>
+                    <th>Cijena</th>
+                    <th>Kategorija</th>
+                    <th>Akcije</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for product in products %}
+                <tr>
+                    <td>{{ product.id }}</td>
+                    <td>{{ product.name }}</td>
+                    <td>{{ "%.2f€"|format(product.price) }}</td>
+                    <td>{{ product.category_ref.name }}</td>
+                    <td class="actions">
+                        <a href="{{ url_for('edit_product', product_id=product.id) }}" class="btn-edit">Uredi</a>
+                        <form action="{{ url_for('delete_product', product_id=product.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Jeste li sigurni da želite obrisati ovaj proizvod?');">
+                            <button type="submit" class="btn-delete">Obriši</button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5">Nema proizvoda u bazi.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>

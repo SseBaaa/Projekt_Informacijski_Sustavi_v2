@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Analiza Zarade</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+</head>
+<body>
+
+    <nav class="navbar">
+    <h1>Dashboard</h1>
+    <div>
+        <span>Prijavljen: <strong>{{ current_user.username }}</strong></span>
+        {% if current_user.is_admin() %}
+        <a href="{{ url_for('admin_products') }}">Admin Proizvodi</a>
+        {% endif %}
+        <a href="{{ url_for('tables') }}">Prikaz Stolova</a>  <a href="{{ url_for('logout') }}">Odjava</a>
+    </div>
+</nav>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <ul class="flash-messages">
+                {% for category, message in messages %}
+                    <li class="{{ category }}">{{ message }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+    {% endwith %}
+
+    <div class="container">
+        <div class="summary-cards">
+            <div class="card">
+                <h3>Ukupna Zarada</h3>
+                <p id="totalEarnings">0.00€</p>
+            </div>
+            <div class="card">
+                <h3>Ukupno Narudžbi</h3>
+                <p id="totalOrders">0</p>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <h3>Zarada po danima (Zadnjih 30 dana)</h3>
+            <canvas id="dailyEarningsChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <h3>Zarada po Kategorijama</h3>
+            <canvas id="categoryEarningsChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <h3>Top 10 najprodavanijih proizvoda (po količini)</h3>
+            <canvas id="topProductsChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            fetch('/api/dashboard/data')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('totalEarnings').textContent = data.summary.total_earnings.toFixed(2) + '€';
+                    document.getElementById('totalOrders').textContent = data.summary.total_orders;
+
+                    const dailyCtx = document.getElementById('dailyEarningsChart').getContext('2d');
+                    new Chart(dailyCtx, {
+                        type: 'line',
+                        data: {
+                            labels: data.daily_earnings.map(d => d.date),
+                            datasets: [{
+                                label: 'Zarada (€)',
+                                data: data.daily_earnings.map(d => d.total),
+                                backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                                borderColor: 'rgba(54, 162, 235, 1)',
+                                borderWidth: 1,
+                                fill: true,
+                            }]
+                        },
+                        options: { scales: { y: { beginAtZero: true } } }
+                    });
+
+                    const categoryCtx = document.getElementById('categoryEarningsChart').getContext('2d');
+                    new Chart(categoryCtx, {
+                        type: 'bar',
+                        data: {
+                            labels: data.category_earnings.map(c => c.category),
+                            datasets: [{
+                                label: 'Zarada po kategoriji (€)',
+                                data: data.category_earnings.map(c => c.total),
+                                backgroundColor: [
+                                    'rgba(255, 99, 132, 0.5)',
+                                    'rgba(54, 162, 235, 0.5)',
+                                    'rgba(255, 206, 86, 0.5)',
+                                    'rgba(75, 192, 192, 0.5)',
+                                    'rgba(153, 102, 255, 0.5)',
+                                    'rgba(255, 159, 64, 0.5)'
+                                ],
+                                borderColor: [
+                                    'rgba(255, 99, 132, 1)',
+                                    'rgba(54, 162, 235, 1)',
+                                    'rgba(255, 206, 86, 1)',
+                                    'rgba(75, 192, 192, 1)',
+                                    'rgba(153, 102, 255, 1)',
+                                    'rgba(255, 159, 64, 1)'
+                                ],
+                                borderWidth: 1
+                            }]
+                        },
+                        options: { scales: { y: { beginAtZero: true } } }
+                    });
+                    // Dodajte ovaj blok nakon `new Chart(categoryCtx, ...)`
+                    const topProductsCtx = document.getElementById('topProductsChart').getContext('2d');
+                    new Chart(topProductsCtx, {
+                        type: 'bar', // Može biti i 'horizontalBar' ako želite
+                        data: {
+                            labels: data.top_products.map(p => p.name),
+                            datasets: [{
+                                label: 'Prodana količina',
+                                data: data.top_products.map(p => p.quantity),
+                                backgroundColor: 'rgba(255, 159, 64, 0.5)',
+                                borderColor: 'rgba(255, 159, 64, 1)',
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            indexAxis: 'y', // Ovo čini bar chart horizontalnim za bolju čitljivost imena
+                            scales: {
+                                x: {
+                                    beginAtZero: true
+                                }
+                            }
+                        }
+                    });
+                })
+                .catch(error => {
+                    console.error('Greška pri dohvaćanju podataka za dashboard:', error);
+                    const container = document.querySelector('.container');
+                    container.innerHTML = '<p style="color:red; text-align:center;">Nije moguće učitati podatke za analizu.</p>';
+                });
+        });
+    </script>
+
+</body>
+</html>

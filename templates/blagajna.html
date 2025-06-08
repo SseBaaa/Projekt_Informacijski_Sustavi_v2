@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blagajna Kafić - POS Sustav</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='blagajna.css') }}">
+</head>
+<body data-order-id="{{ order.id }}" data-table-name="{{ order.table_number }}">
+
+<header class="header">
+    <h1>Kafić Defne</h1>
+    <div class="user-info" style="display: flex; align-items: center; gap: 15px;">
+        <span>Prijavljen: <strong>{{ current_user.username if current_user else "Gost" }}</strong></span>
+        <a href="{{ url_for('tables') }}" style="color: white; text-decoration: none; background-color: #555; padding: 5px 10px; border-radius: 4px;">Prikaz Stolova</a>
+        {% if current_user.is_admin() %}
+        <a href="{{ url_for('admin_products') }}" style="color: white; text-decoration: none; background-color: #f0ad4e; padding: 5px 10px; border-radius: 4px;">Administracija</a>
+        {% endif %}
+        <a href="{{ url_for('dashboard') }}" style="color: white; text-decoration: none; background-color: #555; padding: 5px 10px; border-radius: 4px;">Dashboard</a>
+        <a href="{{ url_for('logout') }}" id="logoutBtn" style="color: white; text-decoration: none; background-color: #c0392b; padding: 5px 10px; border-radius: 4px;">Odjava</a>
+    </div>
+</header>
+
+    <div class="main-container">
+        <div class="products-panel">
+            <h2>Artikli</h2>
+            <input type="search" id="searchItem" class="search-bar" placeholder="Pretraži artikle...">
+
+            <div class="categories">
+                
+            </div>
+
+            <div class="items-grid" id="itemsGrid">
+                
+            </div>
+        </div>
+
+        <div class="order-panel">
+            <div class="table-selection">
+                <label for="tableNumber">Stol:</label>
+                <input type="text" id="tableNumber" value="Šank">
+            </div>
+
+            <h2>Narudžba <button id="clearOrderBtn" style="float:right; font-size:0.7em; padding: 5px;">Očisti</button></h2>
+            <div class="order-details" id="orderDetails">
+                
+            </div>
+
+            <div class="order-summary">
+                <div class="summary-line">
+                    <span>Subtotal:</span>
+                    <span id="subtotalAmount">0.00€</span>
+                </div>
+                <div class="summary-line">
+                    <span>Popust (<input type="number" id="discountPercentage" value="0" min="0" max="100" style="width:40px;">%):</span>
+                    <span id="discountAmount">0.00€</span>
+                </div>
+                 <div class="summary-line">
+                    <span>Porez (npr. 25%):</span>
+                    <span id="taxAmount">0.00€</span>
+                </div>
+                <div class="summary-line total">
+                    <span>UKUPNO:</span>
+                    <span id="totalAmount">0.00€</span>
+                </div>
+            </div>
+
+
+            <div class="actions-grid">
+                <button id="openDrawerBtn" class="action-btn">Otvori Ladicu</button>
+                <button id="stornoBtn" class="action-btn">Storniraj</button>
+                <button id="printPredracunBtn" class="action-btn">Predračun</button>
+                <button id="splitBillBtn" class="action-btn">Podijeli Račun</button>
+                <button id="holdOrderBtn" class="action-btn">Stavi na Čekanje</button>
+            </div>
+
+            <div class="payment-options">
+                <button id="cashPaymentBtn" class="payment-btn cash">Gotovina</button>
+                <button id="cardPaymentBtn" class="payment-btn card">Kartica</button>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p id="statusBar" class="status-bar">Sustav spreman.</p>
+    </footer>
+
+    
+    <div id="cashModal" class="modal">
+        <div class="modal-content">
+            <h2>Plaćanje Gotovinom</h2>
+            <p>Ukupno za platiti: <span id="cashModalTotal">0.00€</span></p>
+            <label for="amountGiven">Primljeni iznos:</label>
+            <input type="number" id="amountGiven" placeholder="Unesite iznos" step="0.01">
+            <p>Povrat: <span id="changeAmount">0.00€</span></p>
+            <div class="modal-buttons">
+                <button id="confirmCashPayment">Potvrdi</button>
+                <button onclick="document.getElementById('cashModal').style.display='none'">Odustani</button>
+            </div>
+        </div>
+    </div>
+    <div id="splitBillModal" class="modal">
+    <div class="modal-content" style="max-width: 800px;">
+        <h2>Podijeli Račun</h2>
+        <div style="display: flex; gap: 20px;">
+            <div style="width: 50%;">
+                <h3>Glavni Račun (<span id="originalBillTotal">0.00</span>€)</h3>
+                <div id="originalBillItems" class="order-details" style="height: 300px;">
+                    </div>
+            </div>
+            <div style="width: 50%;">
+                <h3>Novi Račun (<span id="newBillTotal">0.00</span>€)</h3>
+                <div id="newBillItems" class="order-details" style="height: 300px;">
+                    </div>
+            </div>
+        </div>
+        <div class="modal-buttons" style="margin-top:20px;">
+            <button id="payNewBillCashBtn" class="payment-btn cash">Plati Novi Račun (Gotovina)</button>
+            <button id="payNewBillCardBtn" class="payment-btn card">Plati Novi Račun (Kartica)</button>
+            <button id="closeSplitBillModalBtn">Zatvori</button>
+        </div>
+    </div>
+</div>
+<div id="stornoModal" class="modal">
+    <div class="modal-content" style="max-width: 700px;">
+        <h2>Odaberi narudžbu za storniranje</h2>
+        <p><small>(Prikazane su dovršene i narudžbe na čekanju za današnji dan)</small></p>
+        <div id="stornoOrdersList" style="margin-top: 15px; max-height: 400px; overflow-y: auto; text-align: left;">
+            </div>
+        <div class="modal-buttons" style="margin-top:20px;">
+            <button onclick="document.getElementById('stornoModal').style.display='none'">Odustani</button>
+        </div>
+    </div>
+</div>
+    
+
+    <script>
+        const API_BASE_URL = '/api';
+
+        document.addEventListener('DOMContentLoaded', async function() {
+            const itemsGrid = document.getElementById('itemsGrid');
+            const orderDetails = document.getElementById('orderDetails');
+            const subtotalAmountEl = document.getElementById('subtotalAmount');
+            const discountPercentageEl = document.getElementById('discountPercentage');
+            const discountAmountEl = document.getElementById('discountAmount');
+            const taxAmountEl = document.getElementById('taxAmount');
+            const totalAmountEl = document.getElementById('totalAmount');
+            const tableNumberInput = document.getElementById('tableNumber');
+            const numpadDisplay = document.getElementById('numpadDisplay');
+            const searchItemInput = document.getElementById('searchItem');
+            const bodyEl = document.body;
+            const CURRENT_ORDER_ID = parseInt(bodyEl.dataset.orderId, 10);
+            const CURRENT_TABLE_NAME = bodyEl.dataset.tableName;
+            let currentOrder = []; 
+
+            let allFetchedItemsForSearch = [];
+            document.getElementById('tableNumber').value = CURRENT_TABLE_NAME;
+            document.getElementById('tableNumber').disabled = true;
+
+            async function fetchCategories() {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/categories`);
+                    if (!response.ok) throw new Error(`HTTP greška! Status: ${response.status}`);
+                    const categories = await response.json();
+                    renderCategories(categories);
+                } catch (error) {
+                    console.error("Greška pri dohvaćanju kategorija:", error);
+                    document.querySelector('.categories').innerHTML = '<p style="color:red;">Greška učitavanja kategorija.</p>';
+                }
+            }
+
+            async function loadOrderDetails() {
+                try {
+                    const response = await fetch(`/api/orders/${CURRENT_ORDER_ID}`);
+                    const orderData = await response.json();
+
+                    currentOrder = orderData.items.map(item => ({
+                        id: item.product_id,
+                        name: item.product_name,
+                        price: item.price_at_purchase,
+                        quantity: item.quantity
+                    }));
+
+                    updateOrderDisplay();
+
+                } catch (error) {
+                    console.error('Greška pri učitavanju narudžbe:', error);
+                    alert('Nije moguće učitati detalje narudžbe.');
+                }
+            }
+            async function finalizePayment(paymentMethod) {
+                const total = parseFloat(totalAmountEl.textContent);
+                if (total <= 0 && currentOrder.length === 0) {
+                    alert("Nema stavki za naplatu!");
+                    return;
+                }
+
+                const payload = {
+                    status: 'completed',
+                    total_amount: total,
+                    items: currentOrder.map(item => ({ id: item.id, quantity: item.quantity }))
+                };
+
+                try {
+                    const response = await fetch(`/api/orders/${CURRENT_ORDER_ID}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (response.ok) {
+                        alert(`Plaćanje (${paymentMethod}) uspješno. Račun je zaključen.`);
+                        window.location.href = '/';
+                    } else {
+                        throw new Error('Plaćanje nije uspjelo.');
+                    }
+                } catch (error) {
+                    alert(`Greška: ${error.message}`);
+                }
+            }
+            document.getElementById('confirmCashPayment').addEventListener('click', () => {
+                const total = parseFloat(document.getElementById('cashModalTotal').textContent);
+                const given = parseFloat(document.getElementById('amountGiven').value) || 0;
+
+                if (given < total) {
+                    alert("Nedovoljan iznos! Plaćanje nije moguće.");
+                    return;
+                }
+
+                document.getElementById('cashModal').style.display = 'none';
+                finalizePayment('Gotovina');
+            });
+            document.getElementById('cardPaymentBtn').addEventListener('click', () => {
+            if (confirm(`Potvrdite plaćanje karticom za iznos ${totalAmountEl.textContent}€.`)) {
+                finalizePayment('Kartica');
+            }
+            }); 
+
+            function renderCategories(categories) {
+                const categoriesContainer = document.querySelector('.categories');
+                categoriesContainer.innerHTML = '<button class="category-btn active" data-category-name="all">Sve</button>';
+                categories.forEach(cat => {
+                    const btn = document.createElement('button');
+                    btn.className = 'category-btn';
+                    btn.dataset.categoryName = cat.name;
+                    btn.textContent = cat.name;
+                    categoriesContainer.appendChild(btn);
+                });
+
+                document.querySelectorAll('.category-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        document.querySelector('.category-btn.active')?.classList.remove('active');
+                        btn.classList.add('active');
+                        fetchProducts(btn.dataset.categoryName);
+                    });
+                });
+            }
+
+            async function fetchProducts(categoryName = 'all') {
+                itemsGrid.innerHTML = '<p>Učitavanje artikala...</p>';
+                try {
+                    let url = `${API_BASE_URL}/products`;
+                    if (categoryName && categoryName.toLowerCase() !== 'all') {
+                        url += `?category=${encodeURIComponent(categoryName)}`;
+                    }
+                    const response = await fetch(url);
+                    if (!response.ok) throw new Error(`HTTP greška! Status: ${response.status}`);
+                    const products = await response.json();
+                    allFetchedItemsForSearch = products.slice();
+                    renderItems(products);
+                } catch (error) {
+                    console.error("Greška pri dohvaćanju proizvoda:", error);
+                    itemsGrid.innerHTML = '<p style="color:red;">Greška pri učitavanju artikala.</p>';
+                }
+            }
+            
+            function renderItems(itemsData) {
+                itemsGrid.innerHTML = ''; 
+                if (itemsData.length === 0) {
+                    itemsGrid.innerHTML = '<p>Nema artikala za prikazanu kategoriju/pretragu.</p>';
+                    return;
+                }
+                itemsData.forEach(item => {
+                    const itemBtn = document.createElement('button');
+                    itemBtn.className = 'item-btn';
+                    itemBtn.dataset.id = item.id;
+                    itemBtn.dataset.name = item.name;
+                    itemBtn.dataset.price = item.price;
+                    itemBtn.innerHTML = `${item.name} <span class="item-price">${parseFloat(item.price).toFixed(2)}€</span>`;
+                    itemBtn.addEventListener('click', () => addItemToOrder({
+                        id: item.id,
+                        name: item.name,
+                        price: parseFloat(item.price)
+                    }));
+                    itemsGrid.appendChild(itemBtn);
+                });
+            }
+
+            function addItemToOrder(item) { 
+                const existingItem = currentOrder.find(orderItem => orderItem.id === item.id);
+                if (existingItem) {
+                    existingItem.quantity++;
+                } else {
+                    currentOrder.push({ ...item, quantity: 1 });
+                }
+                updateOrderDisplay();
+            }
+            async function saveOrderChanges() {
+    if (!CURRENT_ORDER_ID) return;
+
+    const payload = {
+        items: currentOrder.map(item => ({ id: item.id, quantity: item.quantity }))
+    };
+
+    try {
+        await fetch(`/api/orders/${CURRENT_ORDER_ID}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        document.getElementById('statusBar').textContent = 'Promjene spremljene.';
+    } catch (error) {
+        document.getElementById('statusBar').textContent = 'Greška pri spremanju.';
+        console.error('Greška:', error);
+    }
+}
+            
+
+            function updateOrderDisplay() {
+                orderDetails.innerHTML = '';
+                let subtotal = 0;
+
+                currentOrder.forEach((item, index) => {
+                    const itemEl = document.createElement('div');
+                    itemEl.className = 'order-item';
+                    const itemTotalPrice = item.quantity * item.price;
+                    itemEl.innerHTML = `
+                        <span class="order-item-name">${item.name}</span>
+                        <input type="number" class="order-item-qty" value="${item.quantity}" min="1" data-index="${index}" style="width: 50px; text-align:center;">
+                        <span class="order-item-price">${item.price.toFixed(2)}€</span>
+                        <span class="order-item-total">${itemTotalPrice.toFixed(2)}€</span>
+                        <button class="remove-item-btn" data-index="${index}" style="color:red; border:none; background:transparent; cursor:pointer; font-weight:bold;">X</button>
+                    `;
+                    subtotal += itemTotalPrice;
+                    orderDetails.appendChild(itemEl);
+                });
+
+                orderDetails.querySelectorAll('.order-item-qty').forEach(input => {
+                    input.addEventListener('input', (e) => {
+                        const index = parseInt(e.target.dataset.index);
+                        let newQty = parseInt(e.target.value);
+                        if (isNaN(newQty) || newQty < 1) {
+                            newQty = 1; 
+                            e.target.value = 1;
+                        }
+                        currentOrder[index].quantity = newQty;
+                        updateOrderDisplay();
+                    });
+                });
+                orderDetails.querySelectorAll('.remove-item-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const index = parseInt(e.target.dataset.index);
+                        currentOrder.splice(index, 1);
+                        updateOrderDisplay();
+                    });
+                });
+
+                const discountPercentage = parseFloat(discountPercentageEl.value) || 0;
+                const discount = subtotal * (discountPercentage / 100);
+                const subtotalAfterDiscount = subtotal - discount;
+                
+                const taxRate = 0.25; 
+                const tax = subtotalAfterDiscount * taxRate;
+                const total = subtotalAfterDiscount + tax;
+
+                subtotalAmountEl.textContent = subtotal.toFixed(2) + '€';
+                discountAmountEl.textContent = discount.toFixed(2) + '€';
+                taxAmountEl.textContent = tax.toFixed(2) + '€';
+                totalAmountEl.textContent = total.toFixed(2) + '€';
+
+                if(currentOrder.length > 0) { 
+                    saveOrderChanges();
+}
+
+            }
+            
+            discountPercentageEl.addEventListener('input', updateOrderDisplay);
+
+            searchItemInput.addEventListener('input', (e) => {
+                const searchTerm = e.target.value.toLowerCase().trim();
+                if (!allFetchedItemsForSearch || allFetchedItemsForSearch.length === 0) {
+                    return;
+                }
+                const filteredItems = allFetchedItemsForSearch.filter(item => 
+                    item.name.toLowerCase().includes(searchTerm)
+                );
+                renderItems(filteredItems);
+            })
+
+
+            document.getElementById('clearOrderBtn').addEventListener('click', () => {
+                if (confirm('Jeste li sigurni da želite očistiti cijelu narudžbu?')) {
+                    currentOrder = [];
+                    discountPercentageEl.value = 0;
+                    updateOrderDisplay();
+                    document.getElementById('statusBar').textContent = "Narudžba očišćena.";
+                }
+            });
+
+            const cashModal = document.getElementById('cashModal');
+            const tablesModal = document.getElementById('tablesModal');
+
+            document.getElementById('cashPaymentBtn').addEventListener('click', () => {
+                const total = parseFloat(totalAmountEl.textContent);
+                if (total <= 0 && currentOrder.length === 0) {
+                    alert("Nema stavki za naplatu!");
+                    return;
+                }
+            document.getElementById('cashModalTotal').textContent = total.toFixed(2) + '€';
+            document.getElementById('amountGiven').value = '';
+            document.getElementById('changeAmount').textContent = '0.00€';
+            cashModal.style.display = 'block';
+            document.getElementById('amountGiven').focus();
+    });
+
+            document.getElementById('amountGiven').addEventListener('input', calculateChange);
+
+            function calculateChange() {
+                const total = parseFloat(document.getElementById('cashModalTotal').textContent);
+                const given = parseFloat(document.getElementById('amountGiven').value) || 0;
+                const change = given - total;
+                document.getElementById('changeAmount').textContent = change >= 0 ? change.toFixed(2) + '€' : 'Nedovoljno!';
+            }
+             document.getElementById('openDrawerBtn').addEventListener('click', () => {
+                alert("Ladica otvorena! (Simulacija)");
+                document.getElementById('statusBar').textContent = "Ladica otvorena.";
+            });
+
+const stornoBtn = document.getElementById('stornoBtn');
+const stornoModal = document.getElementById('stornoModal');
+const stornoOrdersList = document.getElementById('stornoOrdersList');
+
+async function stornirajNarudzbu(orderId) {
+    if (!confirm(`Jeste li sigurni da želite stornirati narudžbu #${orderId}? Ova radnja je nepovratna.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/orders/${orderId}/status`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'cancelled' }),
+        });
+
+        const responseData = await response.json();
+
+        if (!response.ok) {
+            throw new Error(responseData.error || 'Greška na serveru');
+        }
+
+        alert(`Narudžba #${orderId} je uspješno stornirana.`);
+        document.getElementById('statusBar').textContent = `Narudžba #${orderId} stornirana.`;
+        
+        const orderRow = document.querySelector(`.storno-order-row[data-order-id='${orderId}']`);
+        if(orderRow) {
+            orderRow.querySelector('.storno-btn').disabled = true;
+            orderRow.querySelector('.storno-btn').textContent = 'Stornirano';
+            orderRow.style.textDecoration = 'line-through';
+            orderRow.style.opacity = '0.6';
+        }
+
+    } catch (error) {
+        console.error('Greška pri storniranju:', error);
+        alert(`Nije uspjelo storniranje narudžbe: ${error.message}`);
+        document.getElementById('statusBar').textContent = `Greška kod storniranja.`;
+    }
+}
+
+stornoBtn.addEventListener('click', async () => {
+    stornoOrdersList.innerHTML = '<p>Učitavanje narudžbi...</p>';
+    stornoModal.style.display = 'block';
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/orders?status=completed&status=pending`);
+        if (!response.ok) throw new Error('Nije moguće dohvatiti narudžbe.');
+        
+        const orders = await response.json();
+        
+        if (orders.length === 0) {
+            stornoOrdersList.innerHTML = '<p>Nema narudžbi za storniranje za današnji dan.</p>';
+            return;
+        }
+
+        let tableHtml = `<table style="width:100%; border-collapse: collapse;">
+                            <thead>
+                                <tr style="text-align:left;">
+                                    <th style="padding:8px;">ID</th>
+                                    <th style="padding:8px;">Stol</th>
+                                    <th style="padding:8px;">Iznos</th>
+                                    <th style="padding:8px;">Vrijeme</th>
+                                    <th style="padding:8px;">Status</th>
+                                    <th style="padding:8px;">Akcija</th>
+                                </tr>
+                            </thead>
+                            <tbody>`;
+
+        orders.forEach(order => {
+            const timestamp = new Date(order.timestamp).toLocaleTimeString('hr-HR');
+            tableHtml += `<tr class="storno-order-row" data-order-id="${order.id}">
+                            <td style="padding:8px; border-top:1px solid #eee;">#${order.id}</td>
+                            <td style="padding:8px; border-top:1px solid #eee;">${order.table_number}</td>
+                            <td style="padding:8px; border-top:1px solid #eee;">${order.total_amount.toFixed(2)}€</td>
+                            <td style="padding:8px; border-top:1px solid #eee;">${timestamp}</td>
+                            <td style="padding:8px; border-top:1px solid #eee;">${order.status}</td>
+                            <td style="padding:8px; border-top:1px solid #eee;">
+                                <button class="action-btn storno-btn" onclick="stornirajNarudzbu(${order.id})">Storniraj</button>
+                            </td>
+                         </tr>`;
+        });
+        
+        tableHtml += '</tbody></table>';
+        stornoOrdersList.innerHTML = tableHtml;
+
+    } catch (error) {
+        console.error("Greška pri dohvaćanju narudžbi:", error);
+        stornoOrdersList.innerHTML = `<p style="color:red;">${error.message}</p>`;
+    }
+});
+
+window.stornirajNarudzbu = stornirajNarudzbu;
+
+            document.getElementById('printPredracunBtn').addEventListener('click', () => {
+                 if (currentOrder.length === 0) {
+                    alert("Nema stavki za predračun.");
+                    return;
+                }
+                let predracunHtml = "<h2>Predračun</h2>";
+                predracunHtml += `<p>Stol: ${tableNumberInput.value}</p>`;
+                predracunHtml += "<ul>";
+                currentOrder.forEach(item => {
+                    predracunHtml += `<li>${item.name} x ${item.quantity} = ${(item.price * item.quantity).toFixed(2)}€</li>`;
+                });
+                predracunHtml += "</ul>";
+                predracunHtml += `<p>Subtotal: ${subtotalAmountEl.textContent}</p>`;
+                predracunHtml += `<p>Popust: ${discountAmountEl.textContent}</p>`;
+                predracunHtml += `<p>Porez: ${taxAmountEl.textContent}</p>`;
+                predracunHtml += `<h3>Ukupno: ${totalAmountEl.textContent}</h3>`;
+                
+                const predracunWindow = window.open('', 'Predračun', 'height=600,width=800');
+                predracunWindow.document.write('<html><head><title>Predračun</title>');
+                predracunWindow.document.write('<style>body{font-family:Arial,sans-serif;}</style></head><body>');
+                predracunWindow.document.write(predracunHtml);
+                predracunWindow.document.write('</body></html>');
+                predracunWindow.document.close();
+                predracunWindow.print();
+
+                alert("Predračun generiran! (Simulacija)");
+                document.getElementById('statusBar').textContent = `Predračun za stol ${tableNumberInput.value} generiran.`;
+            });
+const holdOrderBtn = document.getElementById('holdOrderBtn');
+const recallOrderBtn = document.getElementById('recallOrderBtn');
+const recallModal = document.getElementById('recallModal');
+const heldOrdersList = document.getElementById('heldOrdersList');
+
+holdOrderBtn.addEventListener('click', async () => {
+    if (currentOrder.length === 0) {
+        alert("Nema stavki u narudžbi za staviti na čekanje.");
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/orders/${CURRENT_ORDER_ID}/status`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'pending' })
+        });
+
+        if (response.ok) {
+            alert(`Narudžba za stol ${CURRENT_TABLE_NAME} je stavljena na čekanje.`);
+            window.location.href = '/';
+        } else {
+            const errData = await response.json();
+            throw new Error(errData.error || 'Nije uspjelo stavljanje na čekanje.');
+        }
+    } catch (error) {
+        alert(`Greška: ${error.message}`);
+    }
+});
+const splitBillBtn = document.getElementById('splitBillBtn');
+const splitBillModal = document.getElementById('splitBillModal');
+const originalBillItemsEl = document.getElementById('originalBillItems');
+const newBillItemsEl = document.getElementById('newBillItems');
+const originalBillTotalEl = document.getElementById('originalBillTotal');
+const newBillTotalEl = document.getElementById('newBillTotal');
+
+let newBill = [];
+
+function renderSplitBillView() {
+    originalBillItemsEl.innerHTML = '';
+    newBillItemsEl.innerHTML = '';
+    let originalTotal = 0;
+    let newTotal = 0;
+
+    currentOrder.forEach((item, index) => {
+        const itemTotalPrice = item.quantity * item.price;
+        originalTotal += itemTotalPrice;
+        const itemEl = document.createElement('div');
+        itemEl.className = 'order-item';
+        itemEl.style.cursor = 'pointer';
+        itemEl.innerHTML = `<span>${item.name} (x${item.quantity})</span> <span>${itemTotalPrice.toFixed(2)}€</span>`;
+        itemEl.title = 'Klikni za prebacivanje na novi račun';
+        itemEl.onclick = () => moveItemToNewBill(index);
+        originalBillItemsEl.appendChild(itemEl);
+    });
+
+    newBill.forEach((item, index) => {
+        const itemTotalPrice = item.quantity * item.price;
+        newTotal += itemTotalPrice;
+        const itemEl = document.createElement('div');
+        itemEl.className = 'order-item';
+        itemEl.style.cursor = 'pointer';
+        itemEl.innerHTML = `<span>${item.name} (x${item.quantity})</span> <span>${itemTotalPrice.toFixed(2)}€</span>`;
+        itemEl.title = 'Klikni za vraćanje na glavni račun';
+        itemEl.onclick = () => moveItemToOriginalBill(index);
+        newBillItemsEl.appendChild(itemEl);
+    });
+    
+    originalBillTotalEl.textContent = originalTotal.toFixed(2);
+    newBillTotalEl.textContent = newTotal.toFixed(2);
+}
+
+function moveItemToNewBill(originalIndex) {
+    const itemToMove = { ...currentOrder[originalIndex] };
+    let quantityToMove = 1;
+
+    if (itemToMove.quantity > 1) {
+        const res = prompt(`Koliko komada artikla "${itemToMove.name}" želite prebaciti?`, 1);
+        if (res === null) return;
+        quantityToMove = parseInt(res);
+        if (isNaN(quantityToMove) || quantityToMove <= 0 || quantityToMove > itemToMove.quantity) {
+            alert("Neispravan unos količine.");
+            return;
+        }
+    }
+
+    currentOrder[originalIndex].quantity -= quantityToMove;
+    
+    const existingItemInNew = newBill.find(item => item.id === itemToMove.id);
+    if (existingItemInNew) {
+        existingItemInNew.quantity += quantityToMove;
+    } else {
+        itemToMove.quantity = quantityToMove;
+        newBill.push(itemToMove);
+    }
+
+    if (currentOrder[originalIndex].quantity === 0) {
+        currentOrder.splice(originalIndex, 1);
+    }
+    
+    renderSplitBillView();
+}
+
+function moveItemToOriginalBill(newIndex) {
+    const itemToMove = { ...newBill[newIndex] };
+    newBill.splice(newIndex, 1);
+
+    const existingItemInOriginal = currentOrder.find(item => item.id === itemToMove.id);
+    if (existingItemInOriginal) {
+        existingItemInOriginal.quantity += itemToMove.quantity;
+    } else {
+        currentOrder.push(itemToMove);
+    }
+
+    renderSplitBillView();
+}
+
+splitBillBtn.addEventListener('click', () => {
+    if (currentOrder.length === 0) {
+        alert("Nema stavki na računu za podjelu.");
+        return;
+    }
+    newBill = [];
+    renderSplitBillView();
+    splitBillModal.style.display = 'block';
+});
+
+document.getElementById('closeSplitBillModalBtn').onclick = () => {
+    newBill.forEach(item => {
+        const existing = currentOrder.find(i => i.id === item.id);
+        if (existing) {
+            existing.quantity += item.quantity;
+        } else {
+            currentOrder.push(item);
+        }
+    });
+    splitBillModal.style.display = 'none';
+};
+
+async function paySplitBill(paymentMethod) {
+    if (newBill.length === 0) {
+        alert("Nema stavki na novom računu za naplatu.");
+        return;
+    }
+
+    let subtotal = newBill.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const tax = subtotal * 0.25;
+    const total = subtotal + tax;
+
+    const orderPayload = {
+        table_number: document.getElementById('tableNumber').value + " (dio)",
+        items: newBill.map(item => ({ id: item.id, quantity: item.quantity })),
+        total_amount: total,
+        status: "completed" 
+    };
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/orders`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(orderPayload),
+        });
+        const responseData = await response.json();
+        if (!response.ok) throw new Error(responseData.error || 'Greška na serveru kod kreiranja odvojenog računa.');
+
+        alert(`Odvojeni račun (Narudžba #${responseData.id}) plaćen (${paymentMethod}).`);
+
+        newBill = [];
+        splitBillModal.style.display = 'none';
+
+        if (currentOrder.length === 0) {
+            document.getElementById('statusBar').textContent = "Sve stavke su naplaćene. Zatvaram stol...";
+
+            const finalPayload = { 
+                status: 'completed', 
+                items: [],
+                total_amount: 0 
+            };
+
+            const closeResponse = await fetch(`/api/orders/${CURRENT_ORDER_ID}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(finalPayload)
+            });
+
+            if (closeResponse.ok) {
+                alert("Cijeli račun je plaćen. Stol se oslobađa.");
+                window.location.href = '/';
+            } else {
+                throw new Error("Greška pri zatvaranju glavnog računa.");
+            }
+
+        } else {
+            updateOrderDisplay();
+            document.getElementById('statusBar').textContent = `Naplaćen dio računa. Preostale stavke prikazane.`;
+        }
+
+    } catch (error) {
+        alert(`Greška kod naplate odvojenog računa: ${error.message}`);
+    }
+}
+
+document.getElementById('payNewBillCashBtn').onclick = () => paySplitBill('Gotovina');
+document.getElementById('payNewBillCardBtn').onclick = () => paySplitBill('Kartica');
+
+            await fetchCategories(); 
+            await fetchProducts('all');
+
+            updateOrderDisplay();
+            
+            await loadOrderDetails();
+        });
+    </script>
+</body>
+</html>

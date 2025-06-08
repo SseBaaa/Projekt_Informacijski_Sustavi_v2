@@ -1,0 +1,10 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    container_name: kafic-pos-compose
+    ports:
+      - "8080:5000"
+    volumes:
+      - ./instance:/app/instance

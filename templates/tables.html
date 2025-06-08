@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prikaz Stolova - Kafić POS</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='tables.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <h1>Prikaz Stolova</h1>
+        <div>
+            <span>Prijavljen: <strong>{{ current_user.username }}</strong></span>
+            {% if current_user.is_admin() %}
+            <a href="{{ url_for('admin_products') }}">Admin Proizvodi</a>
+            {% endif %}
+            <a href="{{ url_for('dashboard') }}">Dashboard</a>
+            <a href="{{ url_for('logout') }}">Odjava</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="table-map" id="tableMap">
+            </div>
+    </div>
+
+    <footer class="footer">
+        <p>Sustav spreman. Odaberite stol za početak.</p>
+    </footer>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const tableMap = document.getElementById('tableMap');
+    const tableNames = [
+        'Stol 1', 'Stol 2', 'Stol 3', 'Stol 4', 'Stol 5',
+        'Stol 6', 'Stol 7', 'Stol 8', 'Separe 1', 'Separe 2',
+        'Terasa 1', 'Terasa 2', 'Terasa 3', 'Terasa 4', 'Šank'
+    ];
+
+    tableNames.forEach(name => {
+        const tableEl = document.createElement('div');
+        tableEl.className = 'table-display status-free';
+        tableEl.dataset.tableName = name;
+        tableEl.innerHTML = `<span>${name}</span>`;
+        tableMap.appendChild(tableEl);
+    });
+
+    async function updateTableStatuses() {
+    try {
+        const response = await fetch('/api/tables/status');
+        if (!response.ok) throw new Error('Greška pri dohvaćanju statusa stolova.');
+        
+        const openOrders = await response.json(); 
+
+        document.querySelectorAll('.table-display').forEach(el => {
+            el.className = 'table-display status-free'; 
+            el.dataset.orderId = '';
+        });
+
+        for (const tableName in openOrders) {
+            const orderInfo = openOrders[tableName];
+            const tableEl = document.querySelector(`.table-display[data-table-name="${tableName}"]`);
+            if (tableEl) {
+                tableEl.classList.remove('status-free');
+                if (orderInfo.status === 'pending') {
+                    tableEl.classList.add('status-pending');
+                } else {
+                    tableEl.classList.add('status-occupied');
+                }
+                tableEl.dataset.orderId = orderInfo.id;
+            }
+        }
+    } catch (error) {
+        console.error(error);
+        alert('Nije moguće učitati status stolova.');
+    }
+}
+
+    tableMap.addEventListener('click', async function(e) {
+        const tableEl = e.target.closest('.table-display');
+        if (!tableEl) return;
+
+        const tableName = tableEl.dataset.tableName;
+        const existingOrderId = tableEl.dataset.orderId;
+
+        if (existingOrderId) {
+            window.location.href = `/blagajna?order_id=${existingOrderId}`;
+        } else {
+            try {
+                const response = await fetch('/api/orders', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ table_number: tableName, status: 'open', items: [], total_amount: 0 })
+                });
+                const newOrder = await response.json();
+                if (response.ok) {
+                    window.location.href = `/blagajna?order_id=${newOrder.id}`;
+                } else {
+                    throw new Error(newOrder.error || 'Nije moguće kreirati narudžbu.');
+                }
+            } catch (error) {
+                console.error('Greška pri otvaranju novog stola:', error);
+                alert(error.message);
+            }
+        }
+    });
+
+    updateTableStatuses();
+    setInterval(updateTableStatuses, 15000);
+});
+</script>
+</body>
+</html>
