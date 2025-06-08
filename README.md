@@ -25,7 +25,10 @@ HTML5 & CSS3: Za strukturu i stil korisničkog sučelja.
 JavaScript (Vanilla JS): Za interaktivnost i dinamičko ponašanje na strani klijenta.
 Chart.js: JavaScript biblioteka za kreiranje interaktivnih grafičkih prikaza podataka na dashboardu.
 
+
+# USECASE
 ![usecase](https://github.com/user-attachments/assets/ea88531e-fd41-4c42-9569-dab7db41cc76)
+
 
 
 # POKRETANJE APLIKACIJU
